@@ -3,7 +3,7 @@
 
 from DoublyLinkedList import DoublyLinkedList
 from Neurode import Neurode
-
+#test
 
 class LayerList(DoublyLinkedList):
     """implement LayerList class."""
