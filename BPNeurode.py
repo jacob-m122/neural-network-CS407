@@ -9,7 +9,7 @@ class BPNeurode(Neurode):
     def __init__(self):
         """Call superclass, initialize delta to zero."""
         super().__init__()
-        self._delta = 0
+        self._delta = 0.0
 
     @staticmethod
     def _sigmoid_derivative(value: float):

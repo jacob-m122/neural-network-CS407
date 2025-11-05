@@ -18,20 +18,26 @@ class EmptySetException(Exception):
 class FFBPNetwork():
     """Implement feed-forward back-propagation network class"""
 
-    def __init__(self, num_inputs: int, num_outputs: int, error_model: Type[RMSE], seed: Optional[int] = None):
+    def __init__(self, num_inputs: int, num_outputs: int, error_model: Type[RMSE], *, learning_rate: float=0.1, seed: Optional[int] = 42, output_activation: str = "sigmoid"):
 
         """
         Initialize LayerList instance, error model, inputs, and outputs.
         seed: optional RNG seed for reproducibility of weight/bias init (if upstream uses random).
         """
 
-        if seed is not None:
-            random.seed(seed)
+        
         self._list = LayerList(num_inputs, num_outputs, neurode_type=FFBPNeurode)
         self._error_model = error_model
         self._num_inputs = num_inputs
         self.num_outputs = num_outputs
-        self._output_activation = "softmax"
+        self._output_activation = output_activation
+        self._seed = seed
+        if seed is not None:
+            random.seed(seed)
+        for n in (self._list.input_nodes + self._list.output_nodes):
+                n.learning_rate = learning_rate
+        self._learning_rate = learning_rate
+
 
     def add_hidden_layer(self, num_nodes: int, position=0):
         """Add hidden layer if position is greater than zero, move forward through layers."""
@@ -41,44 +47,48 @@ class FFBPNetwork():
                 self._list.move_forward()
             else:
                 print("Unable to move forward.")
-        self._list.add_layer(num_nodes)
+        new_nodes = self._list.add_layer(num_nodes)
+        #ensure LR propagates to new nodes
+        for n in new_nodes:
+            n.learning_rate = self._learning_rate
 
-    # ---- small helper to optionally compute accuracy for one-hot labels ----
+    # ----- small helpers -----
+    def _apply_output_activation(self):
+        """Post-process output layer values once all forward ops have settled."""
+        outs = self._list.output_nodes
+        if self._output_activation == "softmax":
+            logits = [n.value for n in outs]
+            m = max(logits)
+            exps = [math.exp(z - m) for z in logits]
+            s = sum(exps) or 1.0
+            for n, e in zip(outs, exps):
+                n._value = e / s  # normalize in place
 
     @staticmethod
-    def _maybe_accuracy(predicted: List[float], expected: List[float]) -> Optional[bool]:
-        """
-        Returns True/False if both look like one-hot vectors (same length >=2),
-        otherwise returns None to indicate 'no accuracy for this sample'.
-        """
-        if not isinstance(predicted, list) or not isinstance(expected, list):
-            return None
-        if len(predicted) != len(expected) or len(expected) < 2:
-            return None
-        # "Looks" like one-hot: expected has a clear argmax at a 1.0 (or near it)
-        e_max_i = max(range(len(expected)), key=lambda i: expected[i])
-        # tolerate slight float noise (expected often exactly 0/1 in your pipeline)
-        is_one_hotish = abs(expected[e_max_i] - 1.0) < 1e-6 and sum(1 for v in expected if abs(v) > 1e-6) == 1
-        if not is_one_hotish:
-            return None
-        p_max_i = max(range(len(predicted)), key=lambda i: predicted[i])
-        return p_max_i == e_max_i
+    def _argmax_idx(vec: List[float]) -> int:
+        return max(range(len(vec)), key=lambda k: vec[k])
 
-    def train(self, data_set: NNData, epochs=1000, verbosity=1, order=Order.SHUFFLE):
-        """
-        Train data set: for each epoch iteration, create training errors, prime training data.
-        Randomize training set as necessary. Retrieve feature-label pair, assign feature values
-        to input layer. Aggregate metrics per epoch (RMSE, optional accuracy).
-        verbosity: 0 = silent, 1 = epoch summaries, 2 = epoch summaries + few sample previews.
-        Returns:
-            history: dict with keys 'rmse' and (when applicable) 'accuracy'.
-        """
 
+    def train(
+            self, 
+            data_set: NNData, 
+            epochs: int = 1000, 
+            verbosity: int = 1, 
+            order: Order = Order.SHUFFLE, 
+            compute_accuracy: bool = True,
+            on_epoch_end: Optional[Callable[[int, Dict[str, List[float]]], None]] = None,
+            ) -> Dict[str, List[float]]:
+    
+        """
+        Returns history dict with 'rmse' and (if enabled) 'accuracy'.
+        Prints once per epoch (if verbosity>0).
+        """
         if data_set.number_of_samples(Set.TRAIN) == 0:
             raise EmptySetException
 
-        history: Dict[str, List[float]] = {'rmse': []}
-        track_accuracy = None  # set to True/False after first batch if we detect one-hot labels
+        history = {"rmse": []}
+        if compute_accuracy:
+            history["accuracy"] = []
 
         for epoch in range(epochs):
             rmse_object = self._error_model()
@@ -87,67 +97,50 @@ class FFBPNetwork():
 
             data_set.prime_data(Set.TRAIN, order)
 
-            sample_preview: List[Tuple[List[float], List[float], List[float]]] = []
-            # ------------------- iterate over training samples -------------------
             while not data_set.pool_is_empty(Set.TRAIN):
                 features, labels = data_set.get_one_item(Set.TRAIN)
 
-                # push inputs
+                # feed inputs
                 for neurode, feature in zip(self._list.input_nodes, features):
                     neurode.set_input(input_value=feature)
 
-                predicted_values = [neurode.value for neurode in self._list.output_nodes]
+                # optional softmax at output
+                self._apply_output_activation()
+
+                predicted_values = [n.value for n in self._list.output_nodes]
                 expected_values = labels
 
                 # accumulate loss
                 rmse_object += (predicted_values, expected_values)
 
-                # set expected for backprop and trigger update downstream
+                # backprop targets
                 for neurode, expected in zip(self._list.output_nodes, expected_values):
                     neurode.set_expected(expected)
 
-                # detect/track accuracy if one-hot classification
-                if track_accuracy is None:
-                    acc_flag = self._maybe_accuracy(predicted_values, expected_values)
-                    if acc_flag is not None:
-                        track_accuracy = True
-                        history.setdefault('accuracy', [])
-                        correct += 1 if acc_flag else 0
-                        total += 1
-                    else:
-                        track_accuracy = False
-                elif track_accuracy:
-                    acc_flag = self._maybe_accuracy(predicted_values, expected_values)
-                    if acc_flag is not None:
-                        correct += 1 if acc_flag else 0
-                        total += 1
+                # accuracy bookkeeping (argmax on one-hot)
+                if compute_accuracy:
+                    p = self._argmax_idx(predicted_values)
+                    t = self._argmax_idx(expected_values)
+                    correct += int(p == t)
+                    total += 1
 
-                # keep 2 examples for preview when verbosity > 1
-                if verbosity > 1 and len(sample_preview) < 2:
-                    sample_preview.append((features, expected_values, predicted_values))
-            # ------------------- end epoch loop -------------------
+            # end-of-epoch logging
+            history["rmse"].append(rmse_object.error)
+            if compute_accuracy:
+                acc = correct / max(total, 1)
+                history["accuracy"].append(acc)
 
-            epoch_rmse = rmse_object.error
-            history['rmse'].append(epoch_rmse)
-
-            if track_accuracy:
-                epoch_acc = (correct / max(1, total))
-                history['accuracy'].append(epoch_acc)
-
-            # compact, once-per-epoch logging
             if verbosity > 0:
-                if track_accuracy:
-                    print(f"[epoch {epoch+1}/{epochs}] RMSE={epoch_rmse:.6f}  ACC={epoch_acc:.3f}")
+                if compute_accuracy:
+                    print(f"Epoch {epoch+1}/{epochs}  RMSE={rmse_object.error:.6f}  ACC={acc:.3f}")
                 else:
-                    print(f"[epoch {epoch+1}/{epochs}] RMSE={epoch_rmse:.6f}")
+                    print(f"Epoch {epoch+1}/{epochs}  RMSE={rmse_object.error:.6f}")
 
-                if verbosity > 1 and sample_preview:
-                    for i, (f, y, yhat) in enumerate(sample_preview, start=1):
-                        print(f"  ex{i}  X:{f}  y:{y}  ŷ:{[round(v,6) for v in yhat]}")
+            if on_epoch_end:
+                on_epoch_end(epoch, history)
 
-        # final line mirrors your style, but now reflects the last epoch summary
-        print(f"Final RMSE value report: {history['rmse'][-1]:.12f}")
         return history
+
 
     def test(self, data_set: NNData, order=Order.STATIC, show_examples: int = 3):
         """
@@ -156,49 +149,51 @@ class FFBPNetwork():
         Returns:
             metrics: dict with 'rmse' and optional 'accuracy'.
         """
+        """
+        Summarize metrics and show a small sample.
+        """
         if data_set.number_of_samples(Set.TEST) == 0:
             raise EmptySetException
 
         rmse_object = self._error_model()
-        correct = 0
-        total = 0
-        examples: List[Tuple[List[float], List[float], List[float]]] = []
-
         data_set.prime_data(Set.TEST, order)
+
+        preds: List[List[float]] = []
+        trues: List[List[float]] = []
 
         while not data_set.pool_is_empty(Set.TEST):
             features, labels = data_set.get_one_item(Set.TEST)
-
             for neurode, feature in zip(self._list.input_nodes, features):
                 neurode.set_input(feature)
 
-            predicted_values = [neurode.value for neurode in self._list.output_nodes]
-            expected_values = labels
+            self._apply_output_activation()
 
+            predicted_values = [n.value for n in self._list.output_nodes]
+            expected_values = labels
             rmse_object += (predicted_values, expected_values)
 
-            # accuracy if one-hot
-            acc_flag = self._maybe_accuracy(predicted_values, expected_values)
-            if acc_flag is not None:
-                total += 1
-                correct += 1 if acc_flag else 0
+            preds.append(predicted_values)
+            trues.append(expected_values)
 
-            if len(examples) < show_examples:
-                examples.append((features, expected_values, predicted_values))
+        # accuracy + confusion
+        pred_classes = [self._argmax_idx(p) for p in preds]
+        true_classes = [self._argmax_idx(t) for t in trues]
+        correct = sum(int(p == t) for p, t in zip(pred_classes, true_classes))
+        acc = correct / max(len(true_classes), 1)
 
-        # summary
-        metrics = {'rmse': rmse_object.error}
-        if total > 0:
-            metrics['accuracy'] = correct / total
+        print(f"(test) Samples: {len(true_classes)}")
+        print(f"(test) RMSE: {rmse_object.error:.6f}  Accuracy: {acc:.3f}")
 
-        # print compact testing summary
-        print(f"(test) Final RMSE: {metrics['rmse']}")
-        if 'accuracy' in metrics:
-            print(f"(test) Accuracy: {metrics['accuracy']:.3f}")
+        # small sample of last 3 items
+        for i in range(max(0, len(preds) - 3), len(preds)):
+            print(f"(test) Input idx {i}: true={true_classes[i]} pred={pred_classes[i]} "
+                  f"probs={['%.3f'%x for x in preds[i]]}")
 
-        for i, (f, y, yhat) in enumerate(examples, start=1):
-            print(f"(test ex{i}) X:{f}")
-            print(f"(test ex{i}) y:{y}")
-            print(f"(test ex{i}) ŷ:{[round(v,6) for v in yhat]}")
-
-        return metrics
+        # confusion matrix
+        K = (max(max(pred_classes), max(true_classes)) + 1) if true_classes else 0
+        cm = [[0]*K for _ in range(K)]
+        for p, t in zip(pred_classes, true_classes):
+            cm[t][p] += 1
+        print("(test) Confusion Matrix (rows=true, cols=pred):")
+        for row in cm:
+            print(row)
