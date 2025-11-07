@@ -8,7 +8,7 @@ def save_model(net, path, extra: dict | None = None):
     }
 
     #deterministic layer/node ordering needed;
-    layers = net._list.layers_aslists()
+    layers = net._list.layers_aslists() # implement this helper to return [[nodes_of_later], ...]
     for layer in layers:
         layer_dump = []
         for n in layer:
@@ -28,4 +28,3 @@ def load_model(net, path):
     net._learning_rate = payload.get("learning_rate", 0.1)
     if "mu" in payload: net._mu = payload["mu"]
     if "sigma" in payload: net._sigma = payload["sigma"]
-    
