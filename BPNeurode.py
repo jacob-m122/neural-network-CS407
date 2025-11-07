@@ -57,7 +57,6 @@ class BPNeurode(Neurode):
             # bias update for the downstream node
             node.adjust_bias(self.learning_rate * node.delta)
 
-
     def _fire_upstream(self):
         """Notify upstream neighbors."""
         for node in self._neighbors[MultiLinkNode.Side.UPSTREAM]:

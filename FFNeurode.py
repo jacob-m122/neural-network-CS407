@@ -1,47 +1,24 @@
 """Implement FFNeurode Class."""
 from __future__ import annotations
-from Neurode import Neurode
-from Neurode import MultiLinkNode
+from Neurode import Neurode, MultiLinkNode
 from math import exp
-import random
-
 
 class FFNeurode(Neurode):
-    """Inherit from parent, Neurode, implement feed-forward process.
-    
-    Minimal upgrades:
-      - Per-node learnable bias (self._bias), included in forward sum.
-      - Safe default learning rate on the node (does not override if already set).
-    """
-
-    def __init__(self, *args, **kwargs):
-        # Preserve whatever Neurode expects
-        super().__init__(*args, **kwargs)
-        # Small random bias init (centered near 0 to avoid saturation)
-        self._bias = (random.random() - 0.5) * 0.02
-        # Only set a default LR if one isn't already present on the instance
-        if not hasattr(self, "learning_rate"):
-            self.learning_rate = 0.1
+    """Inherit from parent, Neurode, implement feed-forward process."""
 
     @staticmethod
     def _sigmoid(value: float):
         """Return sigmoid function result."""
         return 1 / (1 + exp(-value))
 
-    # --- Bias helpers (optional, handy for inspection/checkpointing) ---
-    def get_bias(self) -> float:
-        return self._bias
-
-    def set_bias(self, value: float) -> None:
-        self._bias = float(value)
-
     def _calculate_value(self):
-        """Calculate sum of weighted upstream node values (+ learnable bias)."""
-        weighted_sum = self._bias  # <-- include bias
+        """Calculate sum of weighted upstream node values (+ bias)."""
+        weighted_sum = 0.0
         for node in self._neighbors[MultiLinkNode.Side.UPSTREAM]:
             node_value = node.value
             weight = self.get_weight(node)
             weighted_sum += node_value * weight
+        weighted_sum += self.get_bias()  # NEW: bias addend
         self._value = self._sigmoid(weighted_sum)
 
     def _fire_downstream(self):
@@ -57,6 +34,6 @@ class FFNeurode(Neurode):
 
     def set_input(self, input_value: float):
         """Set input node value, indicate to downstream nodes."""
-        self._value = input_value
+        self._value = float(input_value)
         for neighbor in self._neighbors[MultiLinkNode.Side.DOWNSTREAM]:
             neighbor.data_ready_upstream(self)
