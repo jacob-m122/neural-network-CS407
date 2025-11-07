@@ -1,9 +1,12 @@
+# FFBPNeurode.py
 from FFNeurode import FFNeurode
 from BPNeurode import BPNeurode
 
 class FFBPNeurode(FFNeurode, BPNeurode):
-    """Combine feedforward and backpropagation functions into one class."""
-
+    """Feedforward + Backprop Neurode."""
     def __init__(self):
-        """Initialize neurode with superclass."""
-        super().__init__()
+        super().__init__()   # walks FFNeurode -> BPNeurode -> Neurode -> MultiLinkNode
+
+    # not strictly required, but OK to include:
+    def reset_neighbors(self, nodes, side):
+        return super().reset_neighbors(nodes, side)
