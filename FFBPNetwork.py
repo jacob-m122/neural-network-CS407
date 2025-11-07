@@ -1,10 +1,8 @@
-from RMSE import RMSE
 from NNData import NNData, Order, Set
 from LayerList import LayerList
-from Neurode import Neurode
-from FFNeurode import FFNeurode
-from BPNeurode import BPNeurode
 from FFBPNeurode import FFBPNeurode
+from RMSE import RMSE
+from CrossEntropy import CrossEntropy
 from typing import Type, Callable, Dict, List, Optional, Tuple
 import logging, math, random
 
