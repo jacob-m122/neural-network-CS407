@@ -1,5 +1,4 @@
 #metrics.py
-
 def accuracy_args_max(preds, labels):
     correct = 0
     for p, y in zip(preds, labels):
