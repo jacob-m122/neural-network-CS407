@@ -1,64 +1,108 @@
+"""Implement the MultiLinkNode and Neurode classes."""
 from __future__ import annotations
 from enum import Enum, auto
-from typing import Dict
+import random
+from abc import ABC, abstractmethod
 
-class MultiLinkNode:
+
+class MultiLinkNode(ABC):
+    """
+    Base class which implements enum for upstream and downstream nodes,
+    and tracks neighbor lists and 'all reported' bitmasks.
+    """
+
     class Side(Enum):
         UPSTREAM = auto()
         DOWNSTREAM = auto()
 
-class Neurode:
-    """Base node with neighbor/weight bookkeeping."""
-    # we now keep learning_rate as an *instance* attribute.
     def __init__(self):
-        self._neighbors: Dict[MultiLinkNode.Side, set] = {
-            MultiLinkNode.Side.UPSTREAM: set(),
-            MultiLinkNode.Side.DOWNSTREAM: set(),
+        # Bitmasks of which neighbors have reported on each side
+        self._reporting_nodes = {
+            MultiLinkNode.Side.UPSTREAM: 0,
+            MultiLinkNode.Side.DOWNSTREAM: 0,
         }
-        self._weights: Dict[Neurode, float] = {}
-        self._value: float = 0.0
-        self._data_ready_from: Dict[MultiLinkNode.Side, set] = {
-            MultiLinkNode.Side.UPSTREAM: set(),
-            MultiLinkNode.Side.DOWNSTREAM: set(),
+        # Target bitmasks (all neighbors) for each side
+        self._reference_value = {
+            MultiLinkNode.Side.UPSTREAM: 0,
+            MultiLinkNode.Side.DOWNSTREAM: 0,
         }
-        # NEW: bias & instance LR
-        self._bias: float = 0.0
-        self.learning_rate: float = 0.1
+        # Neighbor lists
+        self._neighbors = {
+            MultiLinkNode.Side.UPSTREAM: [],
+            MultiLinkNode.Side.DOWNSTREAM: [],
+        }
 
-    # ----- Bias helpers (used by FF/BP) -----
-    def get_bias(self) -> float:
-        return self._bias
+    def __str__(self):
+        upstream_id = [str(id(n)) for n in self._neighbors[MultiLinkNode.Side.UPSTREAM]]
+        downstream_id = [str(id(n)) for n in self._neighbors[MultiLinkNode.Side.DOWNSTREAM]]
+        return (
+            f"Node ID: {id(self)}\n"
+            f"Upstream Neighbors: {', '.join(upstream_id)}\n"
+            f"Downstream Neighbors: {', '.join(downstream_id)}\n"
+        )
 
-    def set_bias(self, b: float) -> None:
-        self._bias = float(b)
+    @abstractmethod
+    def _process_new_neighbor(self, node: "MultiLinkNode", side: "MultiLinkNode.Side"):
+        """Hook for subclasses to react when a neighbor is (re)attached on a side."""
+        raise NotImplementedError
 
-    def adjust_bias(self, delta: float) -> None:
-        self._bias += float(delta)
+    def reset_neighbors(self, nodes: list, side: "MultiLinkNode.Side"):
+        """
+        Replace the neighbor list on a side, call hook for each neighbor,
+        and update the 'all reported' reference bitmask.
+        """
+        self._neighbors[side] = list(nodes)  # copy
+        for node in nodes:
+            self._process_new_neighbor(node, side)
+        # bitmask with len(nodes) 1-bits (e.g., for 3 nodes => 0b111 == 7)
+        self._reference_value[side] = (1 << len(nodes)) - 1
 
-    # ----- Edge helpers -----
+
+class Neurode(MultiLinkNode):
+    """Neurode adds values and upstream weights to MultiLinkNode."""
+
+    _learning_rate = 0.05  # class-level default
+
+    @property
+    def learning_rate(self):
+        return Neurode._learning_rate
+
+    @learning_rate.setter
+    def learning_rate(self, value):
+        Neurode._learning_rate = float(value)
+
+    def __init__(self):
+        super().__init__()
+        self._value = 0.0
+        self._weights = {}  # maps UPSTREAM neighbor -> weight
+
+    def _process_new_neighbor(self, node: "Neurode", side: "MultiLinkNode.Side"):
+        # Assign a random weight when an UPSTREAM neighbor is attached
+        if side is MultiLinkNode.Side.UPSTREAM:
+            # Keep existing weight if relinking the same neighbor
+            if node not in self._weights:
+                self._weights[node] = random.random()
+
+    def _check_in(self, node: "Neurode", side: "MultiLinkNode.Side") -> bool:
+        """
+        Mark that 'node' has reported on 'side'. When all neighbors on that side
+        have reported, reset mask and return True.
+        """
+        idx = self._neighbors[side].index(node)
+        self._reporting_nodes[side] |= (1 << idx)
+        if self._reporting_nodes[side] == self._reference_value[side]:
+            self._reporting_nodes[side] = 0
+            return True
+        return False
+
     def get_weight(self, node: "Neurode") -> float:
-        return self._weights.get(node, 0.0)
+        return self._weights[node]
 
-    def set_weight(self, node: "Neurode", value: float) -> None:
-        self._weights[node] = float(value)
-
-    # ----- Value property -----
     @property
     def value(self) -> float:
         return self._value
 
-    # ----- Neighbor registration / data flow checks -----
-    def add_neighbor(self, node: "Neurode", side: MultiLinkNode.Side):
-        self._neighbors[side].add(node)
-
-    def _check_in(self, node: "Neurode", side: MultiLinkNode.Side) -> bool:
-        """Returns True only when we've heard from all neighbors on that side."""
-        self._data_ready_from[side].add(node)
-        ready = self._data_ready_from[side] == self._neighbors[side]
-        if ready:
-            self._data_ready_from[side].clear()
-        return ready
-
-    # Stubs for subclasses to implement
-    def data_ready_upstream(self, node: "Neurode"): ...
-    def data_ready_downstream(self, node: "Neurode"): ...
+    # Optional: a setter if you need to directly assign outputs during forward pass
+    @value.setter
+    def value(self, v: float):
+        self._value = float(v)
