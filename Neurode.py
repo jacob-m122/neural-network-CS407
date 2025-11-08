@@ -67,6 +67,12 @@ class MultiLinkNode(ABC):
         # Update the "all reported" reference mask to match new neighbor count
         self._reference_value[side] = (1 << len(self._neighbors[side])) - 1
 
+    # In MultiLinkNode (Neurode.py), inside the class definition
+    def neighbors(self, side: "MultiLinkNode.Side"):
+        """Return the neighbor list on the given side (read-only view)."""
+        # Return a shallow copy so callers can iterate safely
+        return list(self._neighbors[side])
+
 
 class Neurode(MultiLinkNode):
     """Neurode adds values and upstream weights to MultiLinkNode."""
@@ -85,6 +91,15 @@ class Neurode(MultiLinkNode):
         super().__init__()
         self._value = 0.0
         self._weights = {}  # maps UPSTREAM neighbor -> weight
+        self._bias = 0.0  # <— add this line
+
+    def get_bias(self) -> float:
+        """Return node bias (0.0 if unused)."""
+        return self._bias
+
+    def set_bias(self, value: float) -> None:
+        """Set node bias."""
+        self._bias = float(value)
 
     def _process_new_neighbor(self, node: "Neurode", side: "MultiLinkNode.Side"):
         # Assign a random weight when an UPSTREAM neighbor is attached
@@ -92,6 +107,20 @@ class Neurode(MultiLinkNode):
             # Keep existing weight if relinking the same neighbor
             if node not in self._weights:
                 self._weights[node] = random.random()
+    
+    def fan_in(self) -> int:
+        """Number of upstream connections."""
+        return len(self._neighbors[MultiLinkNode.Side.UPSTREAM])
+
+    def fan_out(self) -> int:
+        """Number of downstream connections."""
+        return len(self._neighbors[MultiLinkNode.Side.DOWNSTREAM])
+    
+    def set_weight(self, upstream_node: "Neurode", value: float) -> None:
+        """Directly set weight for a specific upstream node."""
+        self._weights[upstream_node] = float(value)
+
+
 
     def _check_in(self, node: "Neurode", side: "MultiLinkNode.Side") -> bool:
         """

@@ -127,24 +127,27 @@ class LayerList(DoublyLinkedList):
     # --------------------------
     # Public API: topology edits
     # --------------------------
+# LayerList.py  (only the add_layer method shown with a 1-line return)
+
     def add_layer(self, num_nodes: int):
         """
-        Insert hidden layer between current layer (not tail) and the next, then link.
-        Keeps your existing behavior; bias and seeding are applied automatically.
+        Ensure current layer is not output layer (tail).
+
+        Insert hidden layer between input and output layers, link layers.
         """
         if self._curr == self._tail:
             raise IndexError
         new_hidden_layer = [self._neurode_type() for _ in range(num_nodes)]
         self.add_after_current(new_hidden_layer)
 
-        # Link previous current (upstream) -> new hidden
-        upstream_layer = self._curr.data
-        self.move_forward()  # move onto the new hidden layer node
+        upstream_layer = self._curr.data          # layer that was current
+        self.move_forward()                       # current is now the new hidden layer
         self.linking_helper(upstream_layer, new_hidden_layer)
 
-        # Link new hidden -> existing downstream
-        downstream_layer = self._curr.next.data
+        downstream_layer = self._curr.next.data   # the layer after the new hidden layer
         self.linking_helper(new_hidden_layer, downstream_layer)
+
+        return new_hidden_layer   # ← add this line
 
     def remove_layer(self):
         """

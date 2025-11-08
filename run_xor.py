@@ -17,7 +17,7 @@ net = FFBPNetwork(num_inputs=2, num_outputs=1, error_model=RMSE)
 net.add_hidden_layer(2)
 
 print("=== TRAIN (XOR) ===")
-net.train(data_set=data, epochs=8000, verbosity=1, order=ORDER.SHUFFLE)
+net.train(data_set=data, epochs=8000, verbosity=1, order=Order.SHUFFLE)
 
 print("\n=== TEST (XOR) ===")
 data.split_set(.5)
