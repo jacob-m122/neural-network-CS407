@@ -57,6 +57,16 @@ class MultiLinkNode(ABC):
         # bitmask with len(nodes) 1-bits (e.g., for 3 nodes => 0b111 == 7)
         self._reference_value[side] = (1 << len(nodes)) - 1
 
+    def add_neighbor(self, node: "MultiLinkNode", side: "MultiLinkNode.Side"):
+        """
+        Append a single neighbor on the given side and update reference bitmask.
+        Calls _process_new_neighbor so subclasses can initialize weights, etc.
+        """
+        self._neighbors[side].append(node)
+        self._process_new_neighbor(node, side)
+        # Update the "all reported" reference mask to match new neighbor count
+        self._reference_value[side] = (1 << len(self._neighbors[side])) - 1
+
 
 class Neurode(MultiLinkNode):
     """Neurode adds values and upstream weights to MultiLinkNode."""
