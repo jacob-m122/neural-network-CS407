@@ -57,15 +57,6 @@ class MultiLinkNode(ABC):
         # bitmask with len(nodes) 1-bits (e.g., for 3 nodes => 0b111 == 7)
         self._reference_value[side] = (1 << len(nodes)) - 1
 
-    def add_neighbor(self, node: "MultiLinkNode", side: "MultiLinkNode.Side"):
-        """
-        Append a single neighbor on the given side and update reference bitmask.
-        Calls _process_new_neighbor so subclasses can initialize weights, etc.
-        """
-        self._neighbors[side].append(node)
-        self._process_new_neighbor(node, side)
-        # Update the "all reported" reference mask to match new neighbor count
-        self._reference_value[side] = (1 << len(self._neighbors[side])) - 1
 
     # In MultiLinkNode (Neurode.py), inside the class definition
     def neighbors(self, side: "MultiLinkNode.Side"):
@@ -92,6 +83,14 @@ class Neurode(MultiLinkNode):
         self._value = 0.0
         self._weights = {}  # maps UPSTREAM neighbor -> weight
         self._bias = 0.0  # <— add this line
+
+    def add_neighbor(self, node, side):
+        """Minimal helper used by LayerList; keeps reference bits in sync."""
+        if side not in (MultiLinkNode.Side.UPSTREAM, MultiLinkNode.Side.DOWNSTREAM):
+            raise ValueError("Invalid side")
+        self._neighbors[side].append(node)
+        self._process_new_neighbor(node, side)
+        self._reference_value[side] = (1 << len(self._neighbors[side])) - 1
 
     def get_bias(self) -> float:
         """Return node bias (0.0 if unused)."""
@@ -120,6 +119,8 @@ class Neurode(MultiLinkNode):
         """Directly set weight for a specific upstream node."""
         self._weights[upstream_node] = float(value)
 
+    def neighbors(self, side):
+        return self._neighbors.get(side, [])
 
 
     def _check_in(self, node: "Neurode", side: "MultiLinkNode.Side") -> bool:

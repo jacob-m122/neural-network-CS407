@@ -68,61 +68,49 @@ class LayerList(DoublyLinkedList):
     # Core linking + initialization
     # --------------------------
     def linking_helper(self, upstream_layer, downstream_layer):
-        """Link neighboring layers; optionally attach a bias node to downstream."""
-        # Existing behavior: reset neighbors both ways
+        """Link neighboring layers (no bias nodes; use scalar bias in each neurode)."""
         for neurode in upstream_layer:
             neurode.reset_neighbors(downstream_layer, Neurode.Side.DOWNSTREAM)
         for neurode in downstream_layer:
             neurode.reset_neighbors(upstream_layer, Neurode.Side.UPSTREAM)
+        # Optional: Glorot/Xavier init for incoming weights of each downstream node.
+        self._seed_incoming_weights(downstream_layer)
 
-        # Optional bias for the downstream layer
-        if self._use_bias:
-            self._attach_bias_to_layer(downstream_layer)
+    def _seed_incoming_weights(self, layer, seed: int | None = None):
+        """
+        Xavier/Glorot uniform init for weights from each node's upstream REAL neighbors.
+        fan_in = number of upstream neighbors (inputs for this node)
+        """
+        import math, random
+        if seed is not None:
+            rnd_state = random.getstate()
+            random.seed(seed)
 
-        # Optional deterministic/scaled init for incoming weights to downstream layer
-        if self._seed is not None or self._init_mode in ("fan_in", "uniform"):
-            self._seed_incoming_weights(downstream_layer)
-
-    def _attach_bias_to_layer(self, layer):
-        """Ensure a single bias node feeds every node in `layer` as an extra UPSTREAM neighbor."""
-        layer_key = id(layer)
-        bias = self._bias_nodes.get(layer_key)
-        if bias is None:
-            bias = _BiasNeurode()
-            self._bias_nodes[layer_key] = bias
-
-        # Attach (without disturbing existing upstreams) using add_neighbor helper
         for node in layer:
-            # If add_neighbor helper exists, use it (minimal change).
-            # Fallback would be to rebuild via reset_neighbors, but we avoid that.
-            node.add_neighbor(bias, Neurode.Side.UPSTREAM)
+            # count ONLY real upstream neighbors (no bias nodes, because we don't use them)
+            ups = node.neighbors(Neurode.Side.UPSTREAM)
+            fan_in = len(ups) if ups is not None else 0
+            if fan_in <= 0:
+                continue
+            limit = math.sqrt(6.0 / fan_in)
+            for up in ups:
+                node._weights[up] = random.uniform(-limit, limit)
 
-    def _seed_incoming_weights(self, layer):
-        """
-        Re-seed incoming weights to each node in `layer`.
-        Modes:
-            - fan_in: Xavier/LeCun-like uniform in [-1/sqrt(fan_in), +1/sqrt(fan_in)]
-            - uniform: leave the default 0..1 random from Neurode (no change)
-        """
-        if self._init_mode == "uniform":
-            # Respect default random init already created by reset_neighbors/add_neighbor.
-            # If a seed was provided, we can re-randomize deterministically in [0,1).
-            if self._seed is not None:
+        if seed is not None:
+            random.setstate(rnd_state)
+
+
+            if self._init_mode == "fan_in":
                 for node in layer:
-                    node.reset_weights(seed=self._seed)
-            return
-
-        if self._init_mode == "fan_in":
-            for node in layer:
                 # The node has upstream neighbors already (including bias if enabled)
-                fan_in = node.fan_in()
-                if fan_in <= 0:
-                    continue
-                limit = 1.0 / math.sqrt(fan_in)
-                # Overwrite each upstream weight with scaled uniform
-                for up in node.neighbors(Neurode.Side.UPSTREAM):
-                    w = random.uniform(-limit, limit)
-                    node.set_weight(up, w)
+                    fan_in = node.fan_in()
+                    if fan_in <= 0:
+                        continue
+                    limit = 1.0 / math.sqrt(fan_in)
+                    # Overwrite each upstream weight with scaled uniform
+                    for up in node.neighbors(Neurode.Side.UPSTREAM):
+                        w = random.uniform(-limit, limit)
+                        node.set_weight(up, w)
 
     # --------------------------
     # Public API: topology edits

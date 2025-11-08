@@ -1,45 +1,32 @@
 # RMSE.py
 import numpy as np
+from math import sqrt
 
 class RMSE:
-    """Root Mean Squared Error metric with a simple mini-batch lifecycle."""
+    """Simple RMSE accumulator with .reset(), .add(), and .error property."""
 
     def __init__(self):
-        self._sum_mse = 0.0    # accumulate per-sample MSE (already averaged over outputs)
-        self._count = 0        # number of samples seen
-
-    def reset(self):
-        self._sum_mse = 0.0
+        self._sum_sq = 0.0
         self._count = 0
 
-    def update(self, y_true, y_pred):
-        """
-        y_true, y_pred: array-like, shape (n_outputs,) or (1,) for scalar.
-        Accumulates MSE for one sample (averaged over outputs).
-        """
-        yt = np.asarray(y_true, dtype=float).ravel()
-        yp = np.asarray(y_pred, dtype=float).ravel()
-        if yt.shape != yp.shape:
-            raise ValueError(f"Shape mismatch in RMSE.update: {yt.shape} vs {yp.shape}")
-        diff = yt - yp
-        mse = float(np.dot(diff, diff)) / diff.size
-        self._sum_mse += mse
-        self._count += 1
+    def reset(self):
+        self._sum_sq = 0.0
+        self._count = 0
 
-    def value(self) -> float:
-        """Return RMSE over all updates since last reset()."""
+    def add(self, y_pred, y_true):
+        """
+        y_pred, y_true: scalars or 1D/2D arrays/lists (batch or single).
+        Accumulates sum of squared errors and count of elements.
+        """
+        yp = np.asarray(y_pred, dtype=float)
+        yt = np.asarray(y_true, dtype=float)
+        diff = yp - yt
+        self._sum_sq += float(np.sum(diff * diff))
+        self._count += int(diff.size)
+
+    @property
+    def error(self) -> float:
+        """Return current RMSE; 0.0 if no samples added."""
         if self._count == 0:
             return 0.0
-        mean_mse = self._sum_mse / self._count
-        return mean_mse ** 0.5
-
-    # Optional helper for callers that just want a one-off RMSE
-    @staticmethod
-    def distance(y_true, y_pred) -> float:
-        yt = np.asarray(y_true, dtype=float).ravel()
-        yp = np.asarray(y_pred, dtype=float).ravel()
-        if yt.shape != yp.shape:
-            raise ValueError(f"Shape mismatch in RMSE.distance: {yt.shape} vs {yp.shape}")
-        diff = yt - yp
-        mse = float(np.dot(diff, diff)) / diff.size
-        return mse ** 0.5
+        return sqrt(self._sum_sq / self._count)
