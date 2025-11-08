@@ -13,7 +13,7 @@ data = NNData(features=XOR_features, labels = XOR_labels, train_factor=1.0)
 data.prime_data(Order.SHUFFLE)
 
 # Network: 2 -> 2 (hidden) -> 1
-net = FFBPNetwork(num_inputs=2, num_outputs=1, error_model=RMSE)
+net = FFBPNetwork(num_inputs=2, num_outputs=1, error_model=RMSE, learning_rate=0.3, seed=42)
 net.add_hidden_layer(2)
 
 print("=== TRAIN (XOR) ===")
