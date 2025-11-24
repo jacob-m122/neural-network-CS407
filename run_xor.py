@@ -14,7 +14,7 @@ data.prime_data(Order.SHUFFLE)
 
 # Network: 2 -> 2 (hidden) -> 1
 net = FFBPNetwork(num_inputs=2, num_outputs=1, error_model=RMSE, learning_rate=0.3, seed=42)
-net.add_hidden_layer(8)
+net.add_hidden_layer(6)
 
 print("=== TRAIN (XOR) ===")
 net.train(data_set=data, epochs=8000, verbosity=1, order=Order.SHUFFLE)
