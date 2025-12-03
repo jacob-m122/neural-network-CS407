@@ -5,7 +5,7 @@ from NNData import NNData, Order
 
 def run_iris():
     network = FFBPNetwork(4, 3, RMSE)
-    network.add_hidden_layer(3)
+    network.add_hidden_layer(6)
     Iris_X = [[5.1, 3.5, 1.4, 0.2], [4.9, 3, 1.4, 0.2], [4.7, 3.2, 1.3, 0.2], [4.6, 3.1, 1.5, 0.2],
               [5, 3.6, 1.4, 0.2], [5.4, 3.9, 1.7, 0.4], [4.6, 3.4, 1.4, 0.3], [5, 3.4, 1.5, 0.2],
               [4.4, 2.9, 1.4, 0.2], [4.9, 3.1, 1.5, 0.1], [5.4, 3.7, 1.5, 0.2], [4.8, 3.4, 1.6, 0.2],
@@ -65,7 +65,7 @@ def run_iris():
               [0, 0, 1, ], [0, 0, 1, ], [0, 0, 1, ], [0, 0, 1, ], [0, 0, 1, ], [0, 0, 1, ], [0, 0, 1, ],
               [0, 0, 1, ], [0, 0, 1, ], [0, 0, 1, ]]
     data = NNData(Iris_X, Iris_Y, train_factor=0.7)
-    network.train(data, 10001, order=Order.SHUFFLE)
+    network.train(data, 5000, order=Order.SHUFFLE)
     network.test(data)
 
 run_iris()
