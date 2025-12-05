@@ -1,10 +1,11 @@
 from FFBPNetwork import FFBPNetwork
 from RMSE import RMSE
 from NNData import NNData, Order
+from CrossEntropy import CrossEntropy
 
 
 def run_iris():
-    network = FFBPNetwork(4, 3, RMSE)
+    network = FFBPNetwork(4, 3, CrossEntropy)
     network.add_hidden_layer(6)
     Iris_X = [[5.1, 3.5, 1.4, 0.2], [4.9, 3, 1.4, 0.2], [4.7, 3.2, 1.3, 0.2], [4.6, 3.1, 1.5, 0.2],
               [5, 3.6, 1.4, 0.2], [5.4, 3.9, 1.7, 0.4], [4.6, 3.4, 1.4, 0.3], [5, 3.4, 1.5, 0.2],
