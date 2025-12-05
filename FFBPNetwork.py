@@ -5,6 +5,7 @@ from typing import Type, Callable, Dict, List, Optional
 import logging
 import math
 import random
+import numpy as np
 
 from NNData import NNData, Order, Set
 from LayerList import LayerList
@@ -19,6 +20,7 @@ logger.setLevel(logging.INFO)
 class EmptySetException(Exception):
     """Raised when a requested TRAIN/TEST set is empty."""
     pass
+
 
 
 class FFBPNetwork:
@@ -297,3 +299,9 @@ class FFBPNetwork:
         Vectorized convenience: list of predictions for a batch of feature vectors.
         """
         return [self.predict(x) for x in X]
+    
+    def softmax(z):
+        shift = z - np.max(z)
+        exp = np.exp(shift)
+        return exp / np.sum(exp)
+    
