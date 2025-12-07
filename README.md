@@ -162,22 +162,6 @@ Author
 
 Jacob Mitani
 CS Major @ University of Oregon
-Email: jacobmitani@uoregon.edu
+Email: jmitani@uoregon.edu
 
 GitHub: https://github.com/jacob-m122
-
-License
-
-This project is released for educational use. Feel free to fork, extend, or reference it.
-
-If you'd like, I can generate:
-
-A version with screenshots
-
-A minimal version
-
-A more advanced, technical version
-
-A student-friendly or professor-friendly rewrite
-
-Just tell me!
